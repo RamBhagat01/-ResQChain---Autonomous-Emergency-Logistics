@@ -1,0 +1,10 @@
+{
+  "name": "resqchain-swarm-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FastAPI backend runner for ResQChain Swarm",
+  "scripts": {
+    "dev": "node dev.js",
+    "start": "node dev.js"
+  }
+}

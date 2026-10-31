@@ -1,0 +1,12 @@
+INFO:     Started server process [9928]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+D:\vs-code\next_wave\backend\app\agents\inventory_agent.py:12: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient
+Run time of job "scheduled_swarm_cycle (trigger: interval[0:00:10], next run at: 2026-10-31 21:59:45 IST)" was missed by 0:00:09.822628
+Run time of job "scheduled_swarm_cycle (trigger: interval[0:00:10], next run at: 2026-10-31 22:09:25 IST)" was missed by 0:00:08.444165
+Run time of job "scheduled_swarm_cycle (trigger: interval[0:00:10], next run at: 2026-10-31 22:22:05 IST)" was missed by 0:00:02.087630
+Run time of job "scheduled_swarm_cycle (trigger: interval[0:00:10], next run at: 2026-10-31 23:17:35 IST)" was missed by 0:00:04.180457
+Run time of job "scheduled_swarm_cycle (trigger: interval[0:00:10], next run at: 2026-10-31 23:49:35 IST)" was missed by 0:00:03.679879
+Run time of job "scheduled_swarm_cycle (trigger: interval[0:00:10], next run at: 2026-11-01 00:17:15 IST)" was missed by 0:00:09.482090

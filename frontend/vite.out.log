@@ -1,0 +1,24 @@
+
+> resqchain-swarm-frontend@1.0.0 dev
+> vite --host 0.0.0.0
+
+
+  VITE v5.4.21  ready in 322 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: http://192.168.0.129:5173/
+7:54:20 PM [vite] hmr update /src/components/MapView.jsx, /src/index.css
+7:58:08 PM [vite] hmr update /src/components/OrdersTable.jsx, /src/index.css
+7:58:09 PM [vite] hmr update /src/App.jsx, /src/index.css
+7:58:20 PM [vite] hmr update /src/components/AgentLog.jsx, /src/index.css
+7:59:13 PM [vite] hmr update /src/App.jsx, /src/index.css
+8:04:57 PM [vite] hmr update /src/components/OrdersTable.jsx, /src/index.css
+8:05:23 PM [vite] hmr update /src/components/OrdersTable.jsx, /src/index.css
+8:08:43 PM [vite] hmr update /src/components/ControlPanel.jsx, /src/index.css
+8:08:50 PM [vite] hmr update /src/components/ControlPanel.jsx, /src/index.css
+8:08:58 PM [vite] hmr update /src/components/ControlPanel.jsx, /src/index.css
+8:13:53 PM [vite] hmr update /src/components/ControlPanel.jsx, /src/index.css
+8:25:26 PM [vite] hmr update /src/App.jsx, /src/index.css
+8:25:27 PM [vite] hmr update /src/App.jsx, /src/index.css
+12:25:32 AM [vite] hmr update /src/index.css
+12:25:42 AM [vite] hmr update /src/components/MapView.jsx, /src/index.css
