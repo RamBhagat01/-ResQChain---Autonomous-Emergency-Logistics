@@ -1,0 +1,6 @@
+[
+  {"name":"OSDMA cyclone shelters", "url":"https://osdma.org/", "type":"manual reference", "note":"Verify ownership, access and current availability manually."},
+  {"name":"India-WRIS", "url":"https://indiawris.gov.in/", "type":"manual reference", "note":"Official water resources information portal."},
+  {"name":"Central Water Commission flood forecasts", "url":"https://ffs.india-water.gov.in/", "type":"manual reference", "note":"Check current official flood forecasts."},
+  {"name":"ISRO Bhuvan flood layers", "url":"https://bhuvan-app1.nrsc.gov.in/disaster/disaster.php", "type":"manual reference", "note":"Manual satellite/disaster reference layers."}
+]

@@ -3,6 +3,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.config import settings
 from app.db import SessionLocal
 from app.agents import orchestrator
+from app.services.satellite_flood import refresh_satellite_cache
 
 logger = logging.getLogger("scheduler")
 
@@ -19,6 +20,10 @@ def scheduled_swarm_cycle():
     finally:
         db.close()
 
+
+def scheduled_satellite_refresh():
+    refresh_satellite_cache(SessionLocal)
+
 # Starts the autonomous background swarm scheduler
 def start_scheduler():
     if not scheduler.running:
@@ -29,7 +34,16 @@ def start_scheduler():
             id="swarm_autonomous_loop",
             replace_existing=True
         )
+        scheduler.add_job(
+            scheduled_satellite_refresh,
+            "interval",
+            hours=settings.SATELLITE_REFRESH_HOURS,
+            id="satellite_flood_refresh",
+            replace_existing=True,
+        )
         scheduler.start()
+        # Run once on a worker after startup; never in an HTTP request or swarm cycle.
+        scheduler.add_job(scheduled_satellite_refresh, id="satellite_flood_initial", replace_existing=True)
         logger.info(f"Swarm scheduler started. Running cycle every {settings.CYCLE_SECONDS}s.")
 
 # Safely shuts down the scheduler on server stop

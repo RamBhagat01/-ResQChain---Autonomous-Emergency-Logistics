@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline, GeoJSON, CircleMarker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 
 // Custom Map Click Handler to capture coordinates for disaster simulation
@@ -80,7 +80,7 @@ const createTruckIcon = (name, status, offset) =>
   });
 
 // Interactive Leaflet Map displaying live warehouses, camps, fleet trucks, danger zones, and active routes
-export default function MapView({ warehouses = [], camps = [], vehicles = [], zones = [], orders = [], onLocationSelect }) {
+export default function MapView({ warehouses = [], camps = [], vehicles = [], zones = [], orders = [], floodGeojson = null, predictions = [], sites = [], showSatellite = true, showPrediction = true, showSites = true, onLocationSelect }) {
   // Center map around Odisha (Bhubaneswar - Cuttack - Puri - Paradeep corridor)
   const defaultCenter = [20.3, 85.8];
 
@@ -100,6 +100,23 @@ export default function MapView({ warehouses = [], camps = [], vehicles = [], zo
         />
 
         <MapClickHandler onLocationSelect={onLocationSelect} />
+
+        {showSatellite && floodGeojson && (
+          <GeoJSON data={floodGeojson} pathOptions={{ color: '#2563eb', fillColor: '#3b82f6', fillOpacity: 0.28, weight: 2 }} />
+        )}
+
+        {showPrediction && predictions.map((risk) => {
+          const color = risk.level === 'CRITICAL' ? '#dc2626' : risk.level === 'HIGH' ? '#f97316' : risk.level === 'MODERATE' ? '#f59e0b' : '#22c55e';
+          return <CircleMarker key={`risk-${risk.name}`} center={[risk.lat, risk.lon]} radius={8} pathOptions={{ color, fillColor: color, fillOpacity: 0.65 }}>
+            <Popup><div className="text-slate-900 text-xs"><p className="font-bold">{risk.name}</p><p>Heuristic risk score: {risk.score}/100 ({risk.level})</p>{risk.explanation?.map((line) => <p key={line} className="mt-1">{line}</p>)}</div></Popup>
+          </CircleMarker>;
+        })}
+
+        {showSites && sites.map((site) => (
+          <Marker key={`site-${site.rank}-${site.lat}`} position={[site.lat, site.lon]} icon={L.divIcon({ className: 'site-rank-pin', html: `<div>${site.rank}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] })}>
+            <Popup><div className="text-slate-900 text-xs"><p className="font-bold">#{site.rank} {site.name}</p><p>Score: {site.score}/100</p><p className="mt-1">{site.reason}</p>{site.osm_link && <a href={site.osm_link} target="_blank" rel="noreferrer" className="text-blue-600">OpenStreetMap</a>}</div></Popup>
+          </Marker>
+        ))}
 
         {/* 1. Warehouses */}
         {warehouses.map((wh) => (

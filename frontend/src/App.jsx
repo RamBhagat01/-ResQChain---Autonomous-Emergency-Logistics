@@ -10,6 +10,7 @@ import {
   setAutoDispatch,
   runCycleNow,
   fetchRoutingStatus,
+  fetchFloodPrediction,
 } from './api';
 
 import MapView from './components/MapView';
@@ -17,6 +18,9 @@ import KpiCards from './components/KpiCards';
 import AgentLog from './components/AgentLog';
 import OrdersTable from './components/OrdersTable';
 import ControlPanel from './components/ControlPanel';
+import FloodRiskPanel from './components/FloodRiskPanel';
+import SatelliteFloodPanel from './components/SatelliteFloodPanel';
+import WarehouseSitesPanel from './components/WarehouseSitesPanel';
 import { Wifi, WifiOff, Zap, Info, X, ShieldAlert } from 'lucide-react';
 
 export default function App() {
@@ -27,6 +31,9 @@ export default function App() {
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [activeTab, setActiveTab] = useState('orders'); // 'orders' | 'log'
   const [routingStatus, setRoutingStatus] = useState(null);
+  const [satellite, setSatellite] = useState(null);
+  const [predictions, setPredictions] = useState([]);
+  const [sites, setSites] = useState([]);
 
   const loadState = async () => {
     try {
@@ -43,6 +50,8 @@ export default function App() {
     const stateInterval = setInterval(loadState, 3000);
     return () => clearInterval(stateInterval);
   }, []);
+
+  useEffect(() => { fetchFloodPrediction().then(setPredictions).catch(() => setPredictions([])); const id = setInterval(() => fetchFloodPrediction().then(setPredictions).catch(() => {}), 60000); return () => clearInterval(id); }, []);
 
   useEffect(() => {
     const loadRoutingStatus = async () => {
@@ -184,6 +193,9 @@ export default function App() {
                 vehicles={state?.vehicles || []}
                 zones={state?.zones || []}
                 orders={state?.orders || []}
+                floodGeojson={satellite?.polygons}
+                predictions={predictions}
+                sites={sites}
                 onLocationSelect={handleMapLocationSelect}
               />
             </div>
@@ -209,6 +221,11 @@ export default function App() {
         <div className="lg:col-span-5 flex flex-col gap-5">
           {/* KPI Cards */}
           <KpiCards kpis={state?.kpis} />
+
+          {/* GloFAS Live Flood Risk Panel */}
+          <FloodRiskPanel />
+          <SatelliteFloodPanel onData={setSatellite} />
+          <WarehouseSitesPanel onSites={setSites} />
 
           {/* Tabbed Panel: Orders + Agent Log */}
           <div className="rounded-2xl flex flex-col shadow-sm overflow-hidden bg-white border border-slate-200/80 h-[480px]">

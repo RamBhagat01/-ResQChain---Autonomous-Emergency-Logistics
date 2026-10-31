@@ -8,4 +8,12 @@ apscheduler
 pydantic
 google-genai
 pytest
+# Optional/live Sentinel-1 processing. Sample mode does not require these at runtime.
+pystac-client
+planetary-computer
+rioxarray
+stackstac
+numpy
+scipy
+rasterio
 

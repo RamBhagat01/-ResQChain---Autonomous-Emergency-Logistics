@@ -16,6 +16,7 @@ def run(db: Session, inventory_resolutions: List[Dict[str, Any]]):
         camp = item["camp"]
         warehouse = item["warehouse"]
         ai_reasoning = item["ai_reasoning"]
+        requested_quantity = int(item.get("quantity", demand.quantity))
 
         if not warehouse:
             continue
@@ -23,7 +24,7 @@ def run(db: Session, inventory_resolutions: List[Dict[str, Any]]):
         # 1. Search for an available IDLE vehicle with sufficient cargo capacity
         idle_vehicles = db.query(Vehicle).filter(
             Vehicle.status == "IDLE",
-            Vehicle.capacity >= demand.quantity
+            Vehicle.capacity >= requested_quantity
         ).all()
 
         if not idle_vehicles:
@@ -31,8 +32,8 @@ def run(db: Session, inventory_resolutions: List[Dict[str, Any]]):
             db.add(Event(
                 agent="dispatch",
                 level="warn",
-                message=f"Demand #{demand.id} queued: No free truck with capacity {demand.quantity} units available.",
-                details_json=json.dumps({"demand_id": demand.id, "required_capacity": demand.quantity})
+                message=f"Demand #{demand.id} queued: No free truck with capacity {requested_quantity} units available.",
+                details_json=json.dumps({"demand_id": demand.id, "required_capacity": requested_quantity})
             ))
             db.commit()
             continue
@@ -62,7 +63,7 @@ def run(db: Session, inventory_resolutions: List[Dict[str, Any]]):
             warehouse_id=warehouse.id,
             vehicle_id=chosen_vehicle.id,
             item=demand.item,
-            quantity=demand.quantity,
+            quantity=requested_quantity,
             status=order_status,
             route_geojson=route_info["route_geojson"],
             distance_km=route_info["distance_km"],

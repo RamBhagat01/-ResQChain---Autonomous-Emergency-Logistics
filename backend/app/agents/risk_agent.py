@@ -5,10 +5,19 @@ from sqlalchemy import desc
 from app.config import settings
 from app.models import Zone, Camp, Demand, Vehicle, Observation, Event
 from app.services.geo import haversine_km
+from app.config import settings
+from app.services.satellite_flood import latest_result
 
 # Evaluates danger zones from weather observations and triggers emergency supply demands for affected camps
 def run(db: Session):
     active_zones = db.query(Zone).filter(Zone.active == True).all()
+    satellite = latest_result(db)
+    satellite_features = []
+    try:
+        from shapely.geometry import shape, Point
+        satellite_features = [(shape(f["geometry"]), f.get("properties", {})) for f in satellite.get("polygons", {}).get("features", [])]
+    except Exception:
+        pass
 
     # 1. Process recent weather observations to create weather-triggered zones
     cutoff = datetime.utcnow() - timedelta(minutes=15)
@@ -62,10 +71,16 @@ def run(db: Session):
             highest_severity = max(z.severity for z in nearby_zones)
 
             # Essential emergency relief supplies
+            point = Point(camp.lon, camp.lat) if satellite_features else None
+            observed = any(geom.contains(point) or geom.distance(point) < 0.03 for geom, _ in satellite_features) if point else False
+            scale = 1.0 if observed else min(1.0, highest_severity / 5.0)
+            affected_population = max(1, int(camp.population * scale))
+            days = settings.RELIEF_DAYS
             required_items = [
-                ("food_kits", max(50, int(camp.population * 0.2))),
-                ("water_liters", max(200, int(camp.population * 0.5))),
-                ("medical_kits", max(10, highest_severity * 15)),
+                ("food_kits", max(50, int(affected_population * settings.FOOD_KITS_PER_PERSON * days))),
+                ("water_liters", max(200, int(affected_population * settings.WATER_LITERS_PER_PERSON * days))),
+                ("blankets", max(20, int(affected_population * settings.BLANKETS_PER_PERSON))),
+                ("medical_kits", max(10, int(affected_population * settings.MEDICAL_KITS_PER_PERSON * days))),
             ]
 
             for item_name, qty in required_items:
@@ -110,11 +125,14 @@ def run(db: Session):
         agent="risk",
         level=level,
         message=msg,
-        details_json=json.dumps({
+            details_json=json.dumps({
             "active_zones": len(active_zones),
             "affected_camps": affected_camps,
             "new_demands": new_demands_count,
-            "trapped_vehicles": trapped_vehicles
+                "trapped_vehicles": trapped_vehicles,
+                "satellite_mode": satellite.get("mode"),
+                "satellite_scene_ids": satellite.get("scene_ids", []),
+                "satellite_flooded_km2": satellite.get("flooded_km2", 0),
         })
     )
     db.add(event)

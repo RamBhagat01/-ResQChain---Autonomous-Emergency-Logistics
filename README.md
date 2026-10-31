@@ -33,3 +33,7 @@ npm run dev
 ```
 - Starts both Backend (port 8000) and Frontend (port 5173) in a single command.
 - Or use `npm run dev:backend` / `npm run dev:frontend`.
+
+## Current project handoff
+
+See [PROJECT_HANDOFF.md](./PROJECT_HANDOFF.md) for the current architecture, API contract, verification status and next-task prompt template. Satellite flood observation, heuristic risk scoring and warehouse siting are documented in [docs/SATELLITE_AND_SITING.md](./docs/SATELLITE_AND_SITING.md).

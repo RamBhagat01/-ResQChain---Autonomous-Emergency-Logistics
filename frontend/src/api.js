@@ -1,4 +1,4 @@
-const API_BASE = "http://localhost:8000/api";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 
 // Fetch full system state bundle (warehouses, camps, vehicles, zones, demands, orders, kpis, events)
 export async function fetchState() {
@@ -79,6 +79,38 @@ export async function setAutoDispatch(enabled) {
 export async function runCycleNow() {
   const res = await fetch(`${API_BASE}/cycle/run`, { method: "POST" });
   if (!res.ok) throw new Error("Failed to trigger cycle");
+  return res.json();
+}
+
+// Fetch live GloFAS flood risk for all Odisha monitoring points
+export async function fetchFloodRisk() {
+  const res = await fetch(`${API_BASE}/flood-risk`);
+  if (!res.ok) throw new Error("Failed to fetch flood risk");
+  return res.json();
+}
+
+export async function fetchSatelliteFlood() {
+  const res = await fetch(`${API_BASE}/satellite/flood`);
+  if (!res.ok) throw new Error("Failed to fetch satellite flood data");
+  return res.json();
+}
+
+export async function refreshSatellite() {
+  const res = await fetch(`${API_BASE}/satellite/refresh`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to queue satellite refresh");
+  return res.json();
+}
+
+export async function fetchFloodPrediction() {
+  const res = await fetch(`${API_BASE}/flood-prediction`);
+  if (!res.ok) throw new Error("Failed to fetch heuristic risk scores");
+  return res.json();
+}
+
+export async function fetchWarehouseSites(params = {}) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/warehouse-sites?${query}`);
+  if (!res.ok) throw new Error("Failed to fetch warehouse sites");
   return res.json();
 }
 

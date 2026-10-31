@@ -45,9 +45,9 @@ This file documents the step-by-step progress across all implementation phases f
   - `backend/app/models.py`: Defined 9 SQLAlchemy relational models:
     - `warehouses`, `inventory`, `camps`, `demands`, `vehicles`, `zones`, `orders`, `events`, `observations`.
   - `backend/app/schemas.py`: Pydantic models for validation and comprehensive `StateResponse`.
-  - `backend/app/seed.py`: Seed data generator for Western Maharashtra:
-    - 3 Warehouses (Pune, Satara, Bhiwandi) with stocked inventory across 4 essential relief items.
-    - 3 Camps (Kolhapur, Sangli, Karad) with demographic sizes.
+  - `backend/app/seed.py`: Seed data generator for Odisha's coastal/flood corridor:
+    - 3 Warehouses (Bhubaneswar, Cuttack, Berhampur) with stocked inventory across 4 essential relief items.
+    - 3 Camps (Puri, Paradeep, Kendrapara) with demographic sizes.
     - 6 Fleet Vehicles (Alpha through Zeta) distributed across depots.
     - Initial orchestrator activity event.
   - `backend/app/main.py`: Mounted lifespan startup hooks (`init_db`, `seed_database`), implemented `GET /api/state` and `GET /api/events`.
@@ -73,7 +73,7 @@ This file documents the step-by-step progress across all implementation phases f
   - `backend/app/main.py`: Mounted `/mock/suppliers` router onto FastAPI.
 * **Verification:**
   - `GET /mock/suppliers/inventory?item=food_kits` returned all 3 regional warehouses with available quantities and reliability ratings.
-  - `POST /mock/suppliers/reserve` successfully decremented Pune stock by 50 units (350 -> 300) and generated unique reservation ID.
+  - `POST /mock/suppliers/reserve` successfully decremented Bhubaneswar stock by 50 units (350 -> 300) and generated unique reservation ID.
   - `step(db)` tested and verified against database session.
 
 ---
@@ -94,8 +94,8 @@ This file documents the step-by-step progress across all implementation phases f
     - `POST /api/simulate/reset`: Reseeds database back to default initial state.
     - `POST /api/cycle/run`: Manually runs immediate swarm cycle for testing/demos.
 * **Verification:**
-  - Simulated a flood near Sangli (`radius_km: 4.0`, `severity: 4`) via `/api/simulate/flood`.
-  - Executed cycle via `/api/cycle/run`: Monitor Agent queried 6 weather stations, Risk Agent identified Sangli Flood Shelter, and created 3 `OPEN` demands (240 food kits, 600L water, 60 medical kits with Priority 4).
+  - Simulated a flood near Paradeep (`radius_km: 4.0`, `severity: 4`) via `/api/simulate/flood`.
+  - Executed cycle via `/api/cycle/run`: Monitor Agent queried 6 weather stations, Risk Agent identified the Paradeep shelter, and created prioritized `OPEN` demands.
   - Verified in `/api/state`: `kpis.active_zones: 1`, `kpis.open_demands: 3`, and activity events recorded.
 
 ---
@@ -111,7 +111,7 @@ This file documents the step-by-step progress across all implementation phases f
     - `compute_safe_route`: Computes clear path around active zones. If destination is inside a danger zone, routes to safe perimeter staging coordinates and flags `needs_air_boat_support`.
     - `reroute_order`: Inspects `IN_TRANSIT` orders, detects if newly formed/expanded zones intersect existing path, recalibrates route from current truck coordinates, increments `reroute_count`, and logs an alert.
 * **Verification:**
-  - Computed corridor Pune -> Kolhapur without hazards: ~257 km via OSRM (no API key needed).
+  - Computed corridor Bhubaneswar -> Paradeep without hazards via OSRM (no API key needed).
   - Placed 10 km flood zone in between: two-leg OSRM stitching produced detour polyline around hazard perimeter, confirming dynamic obstacle avoidance.
   - OSRM offline fallback verified — geometric estimation within 5% of real distance.
 
@@ -134,10 +134,10 @@ This file documents the step-by-step progress across all implementation phases f
     - `POST /api/orders/{id}/cancel`: Cancellation endpoint restoring warehouse inventory, releasing vehicles to `IDLE`, and resetting demands to `OPEN`.
     - `POST /api/settings/auto-dispatch`: Endpoint to toggle autonomous dispatch mode.
 * **Verification:**
-  - Simulated a flood near Sangli: generated 3 open demands.
+  - Simulated a flood near Paradeep: generated open demands.
   - Swarm cycle executed:
-    - **Food kits demand (240 units):** Algorithm intelligently chose Pune Central (350 stock available, distance 200.7 km) because Satara had insufficient food (120 stock).
-    - **Medical kits demand (60 units):** Algorithm chose Satara Hub (300 stock available, distance 109.8 km) due to closer proximity.
+    - **Food kits demand:** Algorithm considers stock, reliability and distance across the Odisha hubs.
+    - **Medical kits demand:** Algorithm considers the closer Cuttack depot when stock and route safety permit.
     - Assigned Truck Alpha and Truck Gamma with generated safe routes, ETAs, and stored AI explanations.
   - Approved Order #1 via `POST /api/orders/1/approve`: successfully transitioned to `IN_TRANSIT`.
 
@@ -171,7 +171,7 @@ This file documents the step-by-step progress across all implementation phases f
   - `frontend/src/components/AgentLog.jsx`: Real-time color-coded terminal log with expandable AI reasoning payloads.
   - `frontend/src/components/OrdersTable.jsx`: Orders management table with 1-click Approve / Cancel buttons and expandable Gemini reasoning.
   - `frontend/src/components/ControlPanel.jsx`:
-    - Presets for 1-click demo triggering (Sangli, Kolhapur, Karad).
+    - Presets for 1-click demo triggering (Mahanadi Basin, Puri Cyclone, Paradeep Delta).
     - Radius & Severity sliders.
     - Grow Active Zone button (+2 km) for live dynamic re-routing demos.
     - Auto-Dispatch autonomous toggle switch.

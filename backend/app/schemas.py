@@ -140,6 +140,9 @@ class KpiOut(BaseModel):
     total_reroutes: int
     auto_dispatch: bool
     fallback_mode: bool
+    satellite_mode: str = "SAMPLE"
+    satellite_flooded_km2: float = 0.0
+    satellite_data_age_hours: Optional[float] = None
 
 # Comprehensive state bundle for frontend polling
 class StateResponse(BaseModel):
@@ -151,4 +154,46 @@ class StateResponse(BaseModel):
     orders: List[OrderOut]
     kpis: KpiOut
     events: List[EventOut]
+
+
+class SatelliteFloodResponse(BaseModel):
+    polygons: dict
+    flooded_km2: float
+    scene_dates: List[str]
+    scene_ids: List[str]
+    data_age_hours: Optional[float] = None
+    mode: str
+    status: str = "ok"
+    message: Optional[str] = None
+
+
+class FloodRiskScoreOut(BaseModel):
+    name: str
+    lat: float
+    lon: float
+    score: float
+    level: str
+    explanation: List[str]
+    affected_population: int = 0
+    source: str = "heuristic risk score"
+
+
+class WarehouseSiteOut(BaseModel):
+    rank: int
+    name: str
+    address: Optional[str] = None
+    lat: float
+    lon: float
+    osm_link: Optional[str] = None
+    score: float
+    reason: str
+    status: str = "decision support"
+
+
+class WarehouseSitesResponse(BaseModel):
+    status: str
+    decision_support: bool = True
+    human_verification_required: bool = True
+    sites: List[WarehouseSiteOut] = []
+    message: Optional[str] = None
 

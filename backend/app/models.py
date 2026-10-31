@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, Float, String, Boolean, DateTime, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from app.db import Base
@@ -132,4 +132,19 @@ class Observation(Base):
     lon = Column(Float, nullable=False)
     rain_mm = Column(Float, default=0.0)
     wind_kmh = Column(Float, default=0.0)
+
+
+class SatelliteFloodObservation(Base):
+    """Cached, tile-scoped Sentinel-1/sample result; never computed in a request."""
+    __tablename__ = "satellite_flood_observations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tile = Column(String, nullable=False, index=True)
+    scene_ids = Column(Text, nullable=True)
+    acquired_at = Column(DateTime(timezone=True), nullable=True)
+    processed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    flooded_km2 = Column(Float, default=0.0)
+    geojson = Column(Text, nullable=False, default='{"type":"FeatureCollection","features":[]}')
+    mode = Column(String, nullable=False, default="SAMPLE")
+    data_age_hours = Column(Float, nullable=True)
 

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.models import Demand, Camp, Warehouse, Inventory, Event
 from app.services.geo import haversine_km
 from app.services import llm
+from app.services.satellite_flood import latest_result
 
 # Calls the mock supplier API over HTTP client
 def fetch_inventory_from_supplier_api(item: str) -> List[Dict[str, Any]]:
@@ -38,6 +39,7 @@ def reserve_stock_from_supplier_api(warehouse_id: int, item: str, quantity: int)
 def run(db: Session) -> List[Dict[str, Any]]:
     open_demands = db.query(Demand).filter(Demand.status == "OPEN").all()
     resolutions = []
+    satellite = latest_result(db)
 
     if not open_demands:
         return resolutions
@@ -92,6 +94,8 @@ def run(db: Session) -> List[Dict[str, Any]]:
         decision = llm.ask_json(system_prompt, user_payload)
         chosen_wh_id = decision.get("chosen_warehouse_id")
         reasoning = decision.get("reasoning", "Optimal warehouse chosen based on stock and transit proximity.")
+        reasoning = (f"{reasoning} Satellite context: mode={satellite.get('mode')}, scenes={satellite.get('scene_ids', [])}, "
+                     f"observed flooded area={satellite.get('flooded_km2', 0)} sq km. Allocation is decision support.")
 
         # 3. Reserve inventory via supplier API over HTTP
         reserved = reserve_stock_from_supplier_api(chosen_wh_id, demand.item, demand.quantity)

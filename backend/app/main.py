@@ -7,13 +7,17 @@ from sqlalchemy import desc
 
 from app.config import settings
 from app.db import init_db, get_db, SessionLocal
-from app.models import Warehouse, Camp, Vehicle, Zone, Demand, Order, Event, Inventory
-from app.schemas import StateResponse, EventOut, KpiOut, ZoneCreate, ZoneGrow, ZoneOut, OrderOut, AutoDispatchSetting
+from app.models import Warehouse, Camp, Vehicle, Zone, Demand, Order, Event, Inventory, SatelliteFloodObservation
+from app.schemas import StateResponse, EventOut, KpiOut, ZoneCreate, ZoneGrow, ZoneOut, OrderOut, AutoDispatchSetting, SatelliteFloodResponse, FloodRiskScoreOut, WarehouseSitesResponse
 from app.seed import seed_database
 from app.mock.supplier_api import router as mock_supplier_router
 from app.agents import orchestrator
 from app.scheduler import start_scheduler, stop_scheduler
 from app.services.routing import check_osrm_service
+from app.services.satellite_flood import latest_result, refresh_satellite_cache
+from app.services.flood_prediction import compute_scores
+from app.services.warehouse_siting import recommend_sites
+from app.seed import MONITORING_POINTS
 
 # Lifespan context to initialize database schema, seed data, and start autonomous scheduler
 @asynccontextmanager
@@ -81,6 +85,7 @@ def get_state(db: Session = Depends(get_db)):
     in_transit_count = sum(1 for o in orders if o.status == "IN_TRANSIT")
     delivered_count = sum(1 for o in orders if o.status == "DELIVERED")
     total_reroutes = sum(o.reroute_count for o in orders)
+    satellite = latest_result(db)
 
     # Determine if fallback mode is active (missing API keys)
     fallback_mode = not bool(settings.GEMINI_API_KEY)  # OSRM needs no key
@@ -93,6 +98,9 @@ def get_state(db: Session = Depends(get_db)):
         total_reroutes=total_reroutes,
         auto_dispatch=settings.AUTO_DISPATCH,
         fallback_mode=fallback_mode,
+        satellite_mode=satellite.get("mode", "SAMPLE"),
+        satellite_flooded_km2=satellite.get("flooded_km2", 0.0),
+        satellite_data_age_hours=satellite.get("data_age_hours"),
     )
 
     return StateResponse(
@@ -241,6 +249,51 @@ def cancel_order(order_id: int, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(order)
     return order
+
+# Live GloFAS flood risk for all Odisha monitoring points (no API key needed)
+@app.get("/api/flood-risk")
+def get_flood_risk_endpoint():
+    from app.services.flood_risk import get_all_flood_risks
+    return get_all_flood_risks(MONITORING_POINTS)
+
+
+@app.get("/api/satellite/flood", response_model=SatelliteFloodResponse)
+def satellite_flood(db: Session = Depends(get_db)):
+    return latest_result(db)
+
+
+@app.post("/api/satellite/refresh")
+def satellite_refresh():
+    # APScheduler executes the actual work; this endpoint only queues it.
+    from app.scheduler import scheduler, scheduled_satellite_refresh
+    job_id = "satellite_flood_manual"
+    scheduler.add_job(scheduled_satellite_refresh, id=job_id, replace_existing=True)
+    return {"status": "queued", "message": "Satellite refresh queued in the background."}
+
+
+@app.get("/api/flood-prediction", response_model=List[FloodRiskScoreOut])
+def flood_prediction(db: Session = Depends(get_db)):
+    result = latest_result(db)
+    points = [{**p, "population": 0} for p in MONITORING_POINTS]
+    for camp in db.query(Camp).all():
+        points.append({"name": camp.name, "lat": camp.lat, "lon": camp.lon, "population": camp.population})
+    scores = compute_scores(points, result)
+    # Predicted zones are deliberately simple circles for compatibility with the existing routing layer.
+    from datetime import datetime, timedelta, timezone
+    for item in scores:
+        if item["level"] in {"HIGH", "CRITICAL"}:
+            duplicate = db.query(Zone).filter(Zone.source == "PREDICTED", Zone.active == True,
+                Zone.center_lat.between(item["lat"] - 0.03, item["lat"] + 0.03), Zone.center_lon.between(item["lon"] - 0.03, item["lon"] + 0.03)).first()
+            if not duplicate:
+                db.add(Zone(name=f"Predicted flood risk: {item['name']}", center_lat=item["lat"], center_lon=item["lon"],
+                    radius_km=2.0, severity=5 if item["level"] == "CRITICAL" else 4, source="PREDICTED", active=True))
+    db.commit()
+    return scores
+
+
+@app.get("/api/warehouse-sites", response_model=WarehouseSitesResponse)
+def warehouse_sites(lat: float = Query(20.4625), lon: float = Query(85.8828), radius_km: float = Query(30, gt=0, le=100), limit: int = Query(10, ge=1, le=50), db: Session = Depends(get_db)):
+    return recommend_sites(lat, lon, radius_km, limit, latest_result(db), db.query(Zone).filter(Zone.active == True).all(), db.query(Camp).all())
 
 # Toggle auto-dispatch mode (autonomous vs human approval)
 @app.post("/api/settings/auto-dispatch")

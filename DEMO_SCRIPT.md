@@ -54,6 +54,12 @@
 
 ## 🛡️ 3 Bulletproof Backup Plans (Never Fails)
 
+## 🛰️ Satellite and Siting Add-on
+
+- Point to **Satellite Flood Status** and explain that Sentinel-1 observes recent/current water, while the **heuristic risk score** combines satellite evidence with rainfall, river and terrain/history factors.
+- Keep `SATELLITE_MODE=sample` for an offline demo; call out the visible `SAMPLE` badge rather than presenting sample polygons as live imagery.
+- Point to **Recommended Warehouse Sites** and state clearly that these are decision-support candidates. Ownership, access, legal permission and current availability must be verified by a human.
+
 | Failure Scenario | Built-in Autonomous Protection | Presenter Action |
 |---|---|---|
 | **Backup Plan 1: Internet Down / No Gemini Key** | Deterministic mathematical scoring takes over (`stock * 0.5 + reliability * 0.3 - distance * 0.2`) and outputs clean explanations. | Show the top-right badge: *"Fallback Heuristics Mode"* and highlight that the system is 100% offline-safe. |
