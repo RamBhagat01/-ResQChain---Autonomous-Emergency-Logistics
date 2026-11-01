@@ -26,6 +26,30 @@ function FitWarehouseBounds({ warehouses }) {
   return null;
 }
 
+function FitPreviewRoute({ route }) {
+  const map = useMap();
+  useEffect(() => {
+    const coords = route?.geometry_coords;
+    if (!coords?.length) return;
+    const bounds = L.latLngBounds(coords.map(([lon, lat]) => [lat, lon]));
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [48, 48], maxZoom: 11 });
+  }, [map, route]);
+  return null;
+}
+
+function routeArrowIcon(coords, fraction) {
+  const index = Math.max(1, Math.min(coords.length - 1, Math.floor((coords.length - 1) * fraction)));
+  const [fromLon, fromLat] = coords[index - 1];
+  const [toLon, toLat] = coords[index];
+  const angle = Math.atan2(toLon - fromLon, toLat - fromLat) * (180 / Math.PI);
+  return L.divIcon({
+    className: 'route-direction-arrow',
+    html: `<div style="transform: rotate(${angle}deg)">➤</div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  });
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -92,7 +116,7 @@ const createTruckIcon = (name, status, offset) =>
   });
 
 // Interactive Leaflet Map displaying live warehouses, camps, fleet trucks, danger zones, and active routes
-export default function MapView({ warehouses = [], camps = [], vehicles = [], zones = [], orders = [], floodGeojson = null, predictions = [], sites = [], oswcWarehouses = [], showSatellite = true, showPrediction = true, showSites = true, onLocationSelect }) {
+export default function MapView({ warehouses = [], camps = [], vehicles = [], zones = [], orders = [], floodGeojson = null, predictions = [], sites = [], oswcWarehouses = [], warehouseRiskRoute = null, showSatellite = true, showPrediction = true, showSites = true, onLocationSelect }) {
   // Center map around Odisha (Bhubaneswar - Cuttack - Puri - Paradeep corridor)
   const defaultCenter = [20.3, 85.8];
 
@@ -113,6 +137,7 @@ export default function MapView({ warehouses = [], camps = [], vehicles = [], zo
 
         <MapClickHandler onLocationSelect={onLocationSelect} />
         <FitWarehouseBounds warehouses={oswcWarehouses} />
+        <FitPreviewRoute route={warehouseRiskRoute} />
 
         {showSatellite && floodGeojson && (
           <GeoJSON data={floodGeojson} pathOptions={{ color: '#2563eb', fillColor: '#3b82f6', fillOpacity: 0.28, weight: 2 }} />
@@ -130,6 +155,27 @@ export default function MapView({ warehouses = [], camps = [], vehicles = [], zo
             <Popup><div className="text-slate-900 text-xs"><p className="font-bold">#{site.rank} {site.name}</p><p>Score: {site.score}/100</p><p className="mt-1">{site.reason}</p>{site.osm_link && <a href={site.osm_link} target="_blank" rel="noreferrer" className="text-blue-600">OpenStreetMap</a>}</div></Popup>
           </Marker>
         ))}
+
+        {warehouseRiskRoute?.geometry_coords?.length > 1 && <>
+          <Polyline
+            positions={warehouseRiskRoute.geometry_coords.map(([lon, lat]) => [lat, lon])}
+            pathOptions={{ color: '#0284c7', weight: 6, opacity: 0.95 }}
+          >
+            <Popup><div className="text-slate-900 text-xs"><strong>Supply route</strong><br />{warehouseRiskRoute.warehouse.zone_name} warehouse to {warehouseRiskRoute.risk.name}<br />{warehouseRiskRoute.distance_km} km · {warehouseRiskRoute.duration_min} min · {warehouseRiskRoute.routing}</div></Popup>
+          </Polyline>
+          <CircleMarker center={[warehouseRiskRoute.origin.lat, warehouseRiskRoute.origin.lon]} radius={9} pathOptions={{ color: '#047857', fillColor: '#10b981', fillOpacity: 1, weight: 3 }}>
+            <Popup><strong>{warehouseRiskRoute.warehouse.zone_name} warehouse</strong><br />Route origin</Popup>
+          </CircleMarker>
+          <CircleMarker center={[warehouseRiskRoute.destination.lat, warehouseRiskRoute.destination.lon]} radius={10} pathOptions={{ color: '#b91c1c', fillColor: '#ef4444', fillOpacity: 1, weight: 3 }}>
+            <Popup><strong>{warehouseRiskRoute.risk.name}</strong><br />{warehouseRiskRoute.risk.level} risk area · route destination</Popup>
+          </CircleMarker>
+          {[0.2, 0.4, 0.6, 0.8].map((fraction) => {
+            const coords = warehouseRiskRoute.geometry_coords;
+            const index = Math.max(1, Math.min(coords.length - 1, Math.floor((coords.length - 1) * fraction)));
+            const [lon, lat] = coords[index];
+            return <Marker key={`route-direction-${fraction}`} position={[lat, lon]} icon={routeArrowIcon(coords, fraction)} interactive={false} keyboard={false} />;
+          })}
+        </>}
 
         {/* 1. Warehouses */}
         {warehouses.map((wh) => (

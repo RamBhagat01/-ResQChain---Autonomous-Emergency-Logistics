@@ -22,6 +22,7 @@ import ControlPanel from './components/ControlPanel';
 import FloodRiskPanel from './components/FloodRiskPanel';
 import SatelliteFloodPanel from './components/SatelliteFloodPanel';
 import WarehouseSitesPanel from './components/WarehouseSitesPanel';
+import RoutePlanner from './components/RoutePlanner';
 import { Wifi, WifiOff, Zap, Info, X, ShieldAlert } from 'lucide-react';
 
 export default function App() {
@@ -36,6 +37,7 @@ export default function App() {
   const [predictions, setPredictions] = useState([]);
   const [sites, setSites] = useState([]);
   const [oswcWarehouses, setOswcWarehouses] = useState({ warehouses: [], total_rows: 0, located_count: 0, unlocated_count: 0 });
+  const [warehouseRiskRoute, setWarehouseRiskRoute] = useState(null);
 
   const loadState = async () => {
     try {
@@ -201,10 +203,18 @@ export default function App() {
                 predictions={predictions}
                 sites={sites}
                 oswcWarehouses={oswcWarehouses.warehouses}
+                warehouseRiskRoute={warehouseRiskRoute}
                 onLocationSelect={handleMapLocationSelect}
               />
             </div>
           </div>
+
+          <RoutePlanner
+            predictions={predictions}
+            zones={state?.zones || []}
+            warehouses={oswcWarehouses.warehouses}
+            onRouteChange={setWarehouseRiskRoute}
+          />
 
           {/* Control Panel Card */}
           <div className="rounded-2xl shadow-sm border border-slate-200/80 bg-white overflow-hidden">

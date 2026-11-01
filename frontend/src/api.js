@@ -120,3 +120,10 @@ export async function fetchOSWCWarehouses() {
   return res.json();
 }
 
+export async function fetchWarehouseRiskRoute(params) {
+  const query = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/routing/warehouse-to-risk?${query}`);
+  if (!res.ok) throw new Error("Could not calculate a route for this warehouse and risk area");
+  return res.json();
+}
+

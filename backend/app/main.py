@@ -16,6 +16,8 @@ from app.mock.supplier_api import router as mock_supplier_router
 from app.agents import orchestrator
 from app.scheduler import start_scheduler, stop_scheduler
 from app.services.routing import check_osrm_service
+from app.services.routing import calculate_route, fetch_osrm_route
+from app.services.geo import point_in_zone, route_intersects_zones
 from app.services.satellite_flood import latest_result, refresh_satellite_cache
 from app.services.flood_prediction import compute_scores
 from app.services.warehouse_siting import recommend_sites
@@ -67,6 +69,53 @@ def health_check():
 def routing_status():
     """Return live OSRM availability and a plain-language reason when offline."""
     return check_osrm_service()
+
+
+@app.get("/api/routing/warehouse-to-risk")
+def warehouse_to_risk_route(
+    origin_lat: float = Query(..., ge=-90, le=90),
+    origin_lon: float = Query(..., ge=-180, le=180),
+    dest_lat: float = Query(..., ge=-90, le=90),
+    dest_lon: float = Query(..., ge=-180, le=180),
+    db: Session = Depends(get_db),
+):
+    """Preview a safe route from a selected warehouse to a risk point."""
+    active_zones = db.query(Zone).filter(Zone.active == True).all()
+    endpoint_zones = [
+        zone for zone in active_zones
+        if point_in_zone(origin_lat, origin_lon, zone) or point_in_zone(dest_lat, dest_lon, zone)
+    ]
+    avoid_zones = [zone for zone in active_zones if zone not in endpoint_zones]
+    route = calculate_route(origin_lat, origin_lon, dest_lat, dest_lon, avoid_zones)
+    # Never show a straight-line/geometric fallback as a truck-drivable route.
+    # If the legacy offline corridor fallback was selected, ask OSRM directly;
+    # if unavailable, return no line rather than implying a drivable path.
+    if route.get("approximate_route") or not route.get("geometry_coords"):
+        route = fetch_osrm_route(origin_lat, origin_lon, dest_lat, dest_lon)
+    if not route:
+        return {
+            "available": False,
+            "message": "OSRM road routing is unavailable for this route. No drivable path is being shown; retry when routing is reachable.",
+            "geometry_coords": [],
+            "origin": {"lat": origin_lat, "lon": origin_lon},
+            "destination": {"lat": dest_lat, "lon": dest_lon},
+            "routing": "unavailable",
+        }
+    route_hazards = [zone for zone in active_zones if route_intersects_zones(route.get("geometry_coords", []), [zone])]
+    hazard_names = list(dict.fromkeys(zone.name for zone in [*endpoint_zones, *route_hazards]))
+    return {
+        **route,
+        "available": True,
+        "origin": {"lat": origin_lat, "lon": origin_lon},
+        "destination": {"lat": dest_lat, "lon": dest_lon},
+        "routing": "OSRM road route",
+        "hazard_warning": (
+            "OSRM road route intersects active hazard area(s): "
+            + ", ".join(hazard_names)
+            + ". Verify road closures and field conditions before dispatch."
+            if hazard_names else None
+        ),
+    }
 
 
 @app.get("/api/warehouses/oswc")
