@@ -88,7 +88,7 @@ export default function App() {
 
       {/* ── NAVBAR ─────────────────────────────────────────────────── */}
       <header style={{ backgroundColor: '#ffffff', borderBottom: '3px solid #000000ff' }}
-        className="sticky top-0 z-50 px-6 py-3 flex items-center justify-between shadow-sm">
+        className="sticky top-0 z-[2000] isolate px-6 py-3 flex items-center justify-between shadow-sm">
 
         {/* Brand */}
         <div className="flex items-center gap-3">

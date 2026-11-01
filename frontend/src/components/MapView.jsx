@@ -85,7 +85,7 @@ export default function MapView({ warehouses = [], camps = [], vehicles = [], zo
   const defaultCenter = [20.3, 85.8];
 
   return (
-    <div className="w-full h-full relative rounded-xl overflow-hidden border border-slate-800 shadow-2xl">
+    <div className="relative z-0 isolate w-full h-full rounded-xl overflow-hidden border border-slate-800 shadow-2xl">
       <MapContainer
         center={defaultCenter}
         zoom={8}

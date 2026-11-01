@@ -22,6 +22,9 @@ body {
 .leaflet-container {
   width: 100%;
   height: 100%;
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
   border-radius: 1rem;
   background-color: #f1f5f9;
 }
