@@ -54,39 +54,50 @@ function PointCard({ point }) {
       <DischargeBar pct={point.risk_pct} level={point.risk_level} />
 
       {point.error && (
-        <p className="text-xs text-slate-400 truncate" title={point.error}>Offline</p>
+        <p className="text-xs text-amber-600 truncate" title={point.error}>
+          {point.status === 'CACHED' ? `Cached · ${point.cache_age_minutes ?? '?'} min old` : 'Unavailable'}
+        </p>
       )}
     </div>
   );
 }
 
-export default function FloodRiskPanel() {
+export default function FloodRiskPanel({ onData }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [offline, setOffline] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
     try {
       const result = await fetchFloodRisk();
       setData(result);
+      onData?.(result);
       setLastUpdated(new Date());
-      setOffline(false);
+      setOffline(!result.some(point => point.status === 'LIVE' || point.status === 'CACHED'));
     } catch {
       setOffline(true);
+      // Keep last successful values available to the map and risk selector.
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 30000);
+    const interval = setInterval(load, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [onData]);
 
   const highestRisk = data?.find(p => p.risk_level !== 'NORMAL' && p.risk_level !== 'UNKNOWN');
   const alertCount = data?.filter(p => ['DANGER', 'HIGH_FLOOD'].includes(p.risk_level)).length ?? 0;
+  const rateLimited = data?.some(point => point.status === 'RATE_LIMITED');
+  const retryAfterSeconds = data?.find(point => point.status === 'RATE_LIMITED')?.retry_after_seconds;
+  const retryAfterMinutes = retryAfterSeconds ? Math.ceil(retryAfterSeconds / 60) : null;
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
@@ -99,7 +110,9 @@ export default function FloodRiskPanel() {
           <div>
             <h3 className="font-semibold text-gray-800 text-sm">GloFAS Flood Risk</h3>
             <p className="text-xs text-gray-400">
-              {offline ? 'Offline' : lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Loading…'}
+              {rateLimited
+                ? `Provider rate-limited · retrying in ${retryAfterMinutes ?? 15} min`
+                : offline ? 'Offline' : lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Loading…'}
             </p>
           </div>
         </div>
@@ -122,11 +135,11 @@ export default function FloodRiskPanel() {
       </div>
 
       {/* Offline state */}
-      {offline && (
+      {offline && !data?.some(point => point.status === 'LIVE' || point.status === 'CACHED') && (
         <div className="flex flex-col items-center justify-center py-6 gap-2 text-slate-400">
           <WifiOff size={24} />
-          <p className="text-sm">GloFAS data unavailable</p>
-          <p className="text-xs">Check internet connection</p>
+          <p className="text-sm">{rateLimited ? 'GloFAS provider is temporarily rate-limiting requests' : 'GloFAS data unavailable'}</p>
+          <p className="text-xs">{rateLimited ? `Automatic retry in ${retryAfterMinutes ?? 15} minutes` : 'Check internet connection'}</p>
         </div>
       )}
 
@@ -140,7 +153,7 @@ export default function FloodRiskPanel() {
       )}
 
       {/* Data grid */}
-      {!loading && !offline && data && (
+      {!loading && data?.some(point => point.status === 'LIVE' || point.status === 'CACHED') && (
         <>
           <div className="grid grid-cols-2 gap-2">
             {data.map(point => (
@@ -148,7 +161,7 @@ export default function FloodRiskPanel() {
             ))}
           </div>
           <p className="text-xs text-gray-300 text-right mt-2">
-            Source: GloFAS · Open-Meteo · Live
+            Source: GloFAS · Open-Meteo · {data.some(point => point.status === 'LIVE') ? 'Live' : 'Cached'}
           </p>
         </>
       )}

@@ -37,6 +37,15 @@ function FitPreviewRoute({ route }) {
   return null;
 }
 
+function FocusSelectedRisk({ area }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!Number.isFinite(Number(area?.lat)) || !Number.isFinite(Number(area?.lon))) return;
+    map.flyTo([Number(area.lat), Number(area.lon)], Math.max(map.getZoom(), 10), { duration: 0.6 });
+  }, [area?.id, area?.lat, area?.lon, map]);
+  return null;
+}
+
 function routeArrowIcon(coords, fraction) {
   const index = Math.max(1, Math.min(coords.length - 1, Math.floor((coords.length - 1) * fraction)));
   const [fromLon, fromLat] = coords[index - 1];
@@ -85,6 +94,14 @@ const createWarehouseIcon = (name) =>
 const createCampIcon = (name) =>
   createMapPin({ name: shortPinName(name), icon: '⛺', tone: 'camp', stack: 'center' });
 
+const createSelectedRiskIcon = () => L.divIcon({
+  className: 'selected-risk-location-pin',
+  html: '<svg width="42" height="52" viewBox="0 0 42 52" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M21 1C9.4 1 0 10.4 0 22c0 15.1 21 30 21 30s21-14.9 21-30C42 10.4 32.6 1 21 1Z" fill="#d93808" stroke="#fff" stroke-width="2"/><circle cx="21" cy="21" r="9" fill="#fff"/></svg>',
+  iconSize: [42, 52],
+  iconAnchor: [21, 51],
+  popupAnchor: [0, -48],
+});
+
 function getTruckOffset(vehicles, vehicle) {
   const nearby = vehicles
     .filter((candidate) => {
@@ -116,7 +133,7 @@ const createTruckIcon = (name, status, offset) =>
   });
 
 // Interactive Leaflet Map displaying live warehouses, camps, fleet trucks, danger zones, and active routes
-export default function MapView({ warehouses = [], camps = [], vehicles = [], zones = [], orders = [], floodGeojson = null, predictions = [], sites = [], oswcWarehouses = [], warehouseRiskRoute = null, showSatellite = true, showPrediction = true, showSites = true, onLocationSelect }) {
+export default function MapView({ warehouses = [], camps = [], vehicles = [], zones = [], orders = [], floodGeojson = null, selectedRiskArea = null, sites = [], oswcWarehouses = [], warehouseRiskRoute = null, showSatellite = true, showPrediction = true, showSites = true, onLocationSelect }) {
   // Center map around Odisha (Bhubaneswar - Cuttack - Puri - Paradeep corridor)
   const defaultCenter = [20.3, 85.8];
 
@@ -138,17 +155,29 @@ export default function MapView({ warehouses = [], camps = [], vehicles = [], zo
         <MapClickHandler onLocationSelect={onLocationSelect} />
         <FitWarehouseBounds warehouses={oswcWarehouses} />
         <FitPreviewRoute route={warehouseRiskRoute} />
+        <FocusSelectedRisk area={selectedRiskArea} />
 
         {showSatellite && floodGeojson && (
           <GeoJSON data={floodGeojson} pathOptions={{ color: '#2563eb', fillColor: '#3b82f6', fillOpacity: 0.28, weight: 2 }} />
         )}
 
-        {showPrediction && predictions.map((risk) => {
-          const color = risk.level === 'CRITICAL' ? '#dc2626' : risk.level === 'HIGH' ? '#f97316' : risk.level === 'MODERATE' ? '#f59e0b' : '#22c55e';
-          return <CircleMarker key={`risk-${risk.name}`} center={[risk.lat, risk.lon]} radius={8} pathOptions={{ color, fillColor: color, fillOpacity: 0.65 }}>
-            <Popup><div className="text-slate-900 text-xs"><p className="font-bold">{risk.name}</p><p>Heuristic risk score: {risk.score}/100 ({risk.level})</p>{risk.explanation?.map((line) => <p key={line} className="mt-1">{line}</p>)}</div></Popup>
-          </CircleMarker>;
-        })}
+        {showPrediction && selectedRiskArea && (() => {
+          const risk = selectedRiskArea;
+          const color = risk.level === 'CRITICAL' || risk.level === 'HIGH' ? '#dc2626'
+            : risk.level === 'MODERATE' ? '#2563eb' : risk.level === 'LOW' ? '#16a34a' : '#64748b';
+          const radiusKm = risk.level === 'CRITICAL' ? 8 : risk.level === 'HIGH' ? 6 : risk.level === 'MODERATE' ? 4 : 2.5;
+          return <Circle center={[Number(risk.lat), Number(risk.lon)]} radius={radiusKm * 1000}
+            pathOptions={{ color, fillColor: color, fillOpacity: 0.14, opacity: 0.68, weight: 2 }}>
+            <Popup><div className="text-slate-900 text-xs">
+              <p className="font-bold">{risk.displayName || risk.name}</p>
+              <p>Map priority: {risk.level}</p>
+              {risk.glofas && <p>GloFAS: {risk.glofas.risk_level.replace('_', ' ')} · {risk.glofas.risk_pct}% index · discharge {risk.glofas.discharge_m3s ?? 'unavailable'} m³/s</p>}
+              {risk.heuristicLevel && <p>Heuristic risk score: {risk.heuristicScore}/100 ({risk.heuristicLevel})</p>}
+              {risk.explanation?.map((line) => <p key={line} className="mt-1">{line}</p>)}
+              <p className="mt-1">Planning influence zone, not measured flood extent.</p>
+            </div></Popup>
+          </Circle>;
+        })()}
 
         {showSites && sites.map((site) => (
           <Marker key={`site-${site.rank}-${site.lat}`} position={[site.lat, site.lon]} icon={L.divIcon({ className: 'site-rank-pin', html: `<div>${site.rank}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] })}>
@@ -169,13 +198,15 @@ export default function MapView({ warehouses = [], camps = [], vehicles = [], zo
           <CircleMarker center={[warehouseRiskRoute.destination.lat, warehouseRiskRoute.destination.lon]} radius={10} pathOptions={{ color: '#b91c1c', fillColor: '#ef4444', fillOpacity: 1, weight: 3 }}>
             <Popup><strong>{warehouseRiskRoute.risk.name}</strong><br />{warehouseRiskRoute.risk.level} risk area · route destination</Popup>
           </CircleMarker>
-          {[0.2, 0.4, 0.6, 0.8].map((fraction) => {
-            const coords = warehouseRiskRoute.geometry_coords;
-            const index = Math.max(1, Math.min(coords.length - 1, Math.floor((coords.length - 1) * fraction)));
-            const [lon, lat] = coords[index];
-            return <Marker key={`route-direction-${fraction}`} position={[lat, lon]} icon={routeArrowIcon(coords, fraction)} interactive={false} keyboard={false} />;
-          })}
         </>}
+
+        {selectedRiskArea && <Marker
+          position={[Number(selectedRiskArea.lat), Number(selectedRiskArea.lon)]}
+          icon={createSelectedRiskIcon()}
+          zIndexOffset={1500}
+        >
+          <Popup><div className="text-slate-900 text-xs"><strong>{selectedRiskArea.displayName || selectedRiskArea.name}</strong><br />Selected {selectedRiskArea.level} risk area · {selectedRiskArea.score}/100</div></Popup>
+        </Marker>}
 
         {/* 1. Warehouses */}
         {warehouses.map((wh) => (
@@ -236,7 +267,7 @@ export default function MapView({ warehouses = [], camps = [], vehicles = [], zo
         ))}
 
         {/* 3. Fleet Vehicles */}
-        {vehicles.map((v) => (
+        {false && vehicles.map((v) => (
           <Marker
             key={`v-${v.id}`}
             position={[v.lat, v.lon]}
@@ -257,7 +288,7 @@ export default function MapView({ warehouses = [], camps = [], vehicles = [], zo
         ))}
 
         {/* 4. Active Danger / Flood Zones */}
-        {zones.filter((z) => z.active).map((zone) => (
+        {zones.filter((z) => z.active && selectedRiskArea?.id === `zone-${z.id}`).map((zone) => (
           <Circle
             key={`zone-${zone.id}`}
             center={[zone.center_lat, zone.center_lon]}
@@ -318,7 +349,15 @@ export default function MapView({ warehouses = [], camps = [], vehicles = [], zo
       </MapContainer>
 
       {/* Map Legend Overlay */}
-      <div className="absolute bottom-3 left-3 z-[1000] bg-white/90 backdrop-blur-md border border-slate-200 rounded-xl p-3 text-[11px] text-slate-700 space-y-1.5 shadow-md pointer-events-none">
+      {false && <div className="absolute bottom-3 left-3 z-[1000] bg-white/90 backdrop-blur-md border border-slate-200 rounded-xl p-3 text-[11px] text-slate-700 space-y-1.5 shadow-md pointer-events-none">
+        {showPrediction && <>
+          <div className="font-bold text-slate-800">Heuristic risk score</div>
+          <div className="flex items-center space-x-2"><span className="w-2.5 h-2.5 rounded-full bg-red-600 inline-block" /><span>High / Critical — prioritize first</span></div>
+          <div className="flex items-center space-x-2"><span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block" /><span>Moderate</span></div>
+          <div className="flex items-center space-x-2"><span className="w-2.5 h-2.5 rounded-full bg-green-600 inline-block" /><span>Low</span></div>
+          <div className="flex items-center space-x-2"><span className="w-2.5 h-2.5 rounded-full bg-slate-500 inline-block" /><span>Unknown — signals unavailable</span></div>
+          <div className="max-w-52 text-[10px] text-slate-500">Planning zones are not flood boundaries. Sentinel-1 shows observed water; risk is heuristic.</div>
+        </>}
         <div className="flex items-center space-x-2">
           <span>🏢</span> <span className="font-medium">Regional Warehouse</span>
         </div>
@@ -326,7 +365,7 @@ export default function MapView({ warehouses = [], camps = [], vehicles = [], zo
           <span>⛺</span> <span className="font-medium">Relief Camp</span>
         </div>
         <div className="flex items-center space-x-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-sm"></span> <span className="font-medium">Delivery Truck</span>
+          {false && <><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-sm"></span> <span className="font-medium">Delivery Truck</span></>}
         </div>
         <div className="flex items-center space-x-2">
           <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block shadow-sm"></span> <span className="font-medium">Active Danger Zone</span>
@@ -337,7 +376,7 @@ export default function MapView({ warehouses = [], camps = [], vehicles = [], zo
         <div className="flex items-center space-x-2">
           <span className="w-4 h-1 border-t-2 border-dashed border-purple-500 inline-block"></span> <span className="font-medium">Rerouted Path</span>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

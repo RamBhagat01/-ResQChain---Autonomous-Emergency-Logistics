@@ -35,9 +35,11 @@ export default function App() {
   const [routingStatus, setRoutingStatus] = useState(null);
   const [satellite, setSatellite] = useState(null);
   const [predictions, setPredictions] = useState([]);
+  const [glofasRisks, setGlofasRisks] = useState([]);
   const [sites, setSites] = useState([]);
   const [oswcWarehouses, setOswcWarehouses] = useState({ warehouses: [], total_rows: 0, located_count: 0, unlocated_count: 0 });
   const [warehouseRiskRoute, setWarehouseRiskRoute] = useState(null);
+  const [selectedRiskArea, setSelectedRiskArea] = useState(null);
 
   const loadState = async () => {
     try {
@@ -186,21 +188,22 @@ export default function App() {
                 <h2 className="font-bold text-sm text-slate-800">Live Situation Map</h2>
                 <p className="text-xs text-slate-400 mt-0.5">Odisha Disaster Corridor · Click map to set flood location</p>
               </div>
-              <div className="flex gap-2 text-[11px]">
+              <div className="flex flex-wrap gap-2 text-[11px]">
                 <span className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-blue-200 bg-blue-50 text-blue-700 font-medium">🏭 Warehouses</span>
                 <span className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-amber-200 bg-amber-50 text-amber-700 font-medium">⛺ Camps</span>
-                <span className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 font-medium">🚛 Trucks</span>
+                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-800 font-medium" title="The W number matches the numbered warehouse marker on the map">
+                  <span className="rounded border-2 border-white bg-emerald-700 px-1 py-px text-[10px] font-bold text-white shadow-sm">W</span>
+                  Warehouse number
+                </span>
               </div>
             </div>
             <div style={{ height: 420 }}>
               <MapView
                 warehouses={state?.warehouses || []}
                 camps={state?.camps || []}
-                vehicles={state?.vehicles || []}
                 zones={state?.zones || []}
-                orders={state?.orders || []}
                 floodGeojson={satellite?.polygons}
-                predictions={predictions}
+                selectedRiskArea={selectedRiskArea}
                 sites={sites}
                 oswcWarehouses={oswcWarehouses.warehouses}
                 warehouseRiskRoute={warehouseRiskRoute}
@@ -209,11 +212,28 @@ export default function App() {
             </div>
           </div>
 
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-slate-700">
+              <span className="font-bold text-slate-800">Map legend</span>
+              {(predictions.length > 0 || glofasRisks.length > 0) && <>
+                <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-red-600" />High / Critical risk</span>
+                <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-blue-600" />Moderate risk</span>
+                <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-full bg-green-600" />Low risk</span>
+              </>}
+              <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-rose-500" />Active danger zone</span>
+              <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-blue-400" />Observed satellite water</span>
+              <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-sky-500" />Warehouse-to-area route</span>
+              <span className="text-slate-500">Risk colors compare GloFAS levels with heuristic scores; planning guidance, not flood boundaries.</span>
+            </div>
+          </div>
+
           <RoutePlanner
             predictions={predictions}
+            glofasRisks={glofasRisks}
             zones={state?.zones || []}
             warehouses={oswcWarehouses.warehouses}
             onRouteChange={setWarehouseRiskRoute}
+            onRiskAreaChange={setSelectedRiskArea}
           />
 
           {/* Control Panel Card */}
@@ -238,7 +258,7 @@ export default function App() {
           <KpiCards kpis={state?.kpis} />
 
           {/* GloFAS Live Flood Risk Panel */}
-          <FloodRiskPanel />
+          <FloodRiskPanel onData={setGlofasRisks} />
           <SatelliteFloodPanel onData={setSatellite} />
           <WarehouseSitesPanel onSites={setSites} />
 
@@ -292,7 +312,7 @@ export default function App() {
 
       {/* ── FOOTER ─────────────────────────────────────────────────── */}
       <footer className="py-3 px-6 text-center text-xs text-slate-400 border-t border-slate-200/80 bg-white">
-        ResQChain Swarm · Odisha OSDMA Corridor · 3 Hubs · 3 Coastal Shelters · 6 Fleet Vehicles
+        ResQChain Swarm · Odisha OSDMA Corridor · 3 Hubs · 3 Coastal Shelters · Delivery route planning
         <span className="mx-2">·</span>
         Routing by <a href="https://project-osrm.org" target="_blank" rel="noreferrer" style={{ color: '#ff5a5f' }}>OSRM</a>
         <span className="mx-2">·</span>
@@ -323,11 +343,11 @@ export default function App() {
             {/* Agent Cards */}
             <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
               {[
-                { icon: '🌧️', name: 'Monitor Agent', desc: 'Watches live Open-Meteo rainfall and GPS truck positions every 10 seconds.', color: '#eff6ff', accent: '#2563eb' },
+                { icon: '🌧️', name: 'Monitor Agent', desc: 'Checks Open-Meteo rainfall observations every 10 seconds; no vehicle location tracking is used.', color: '#eff6ff', accent: '#2563eb' },
                 { icon: '⚠️', name: 'Risk Agent', desc: 'Maps danger zones from weather data and raises prioritized supply demands.', color: '#fef2f2', accent: '#dc2626' },
                 { icon: '📦', name: 'Inventory Agent', desc: 'Uses Gemini AI to pick the best warehouse and reserve the right supplies.', color: '#fffbeb', accent: '#d97706' },
-                { icon: '🗺️', name: 'Routing Agent', desc: 'Calculates safe truck routes via OSRM, routing around flood zones.', color: '#faf5ff', accent: '#7c3aed' },
-                { icon: '🚛', name: 'Dispatch Agent', desc: 'Assigns the nearest available truck and sends Telegram alerts.', color: '#f0fdf4', accent: '#16a34a' },
+                { icon: '🗺️', name: 'Routing Agent', desc: 'Calculates safe warehouse-to-destination delivery routes via OSRM, routing around flood zones.', color: '#faf5ff', accent: '#7c3aed' },
+                { icon: '📦', name: 'Dispatch Agent', desc: 'Prepares supply orders and delivery plans and sends optional Telegram alerts.', color: '#f0fdf4', accent: '#16a34a' },
                 { icon: '🧠', name: 'Orchestrator', desc: 'Runs all 6 agents in sequence every 10 seconds, logging every decision.', color: '#f0f9ff', accent: '#0284c7' },
               ].map((a, i) => (
                 <div key={i} className="flex gap-3 p-4 rounded-xl" style={{ backgroundColor: a.color, border: '2px solid #000000' }}>

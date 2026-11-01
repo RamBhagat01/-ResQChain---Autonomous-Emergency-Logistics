@@ -28,7 +28,7 @@ def test_initial_state():
     data = resp.json()
     assert len(data["warehouses"]) == 3
     assert len(data["camps"]) == 3
-    assert len(data["vehicles"]) == 6
+    assert data["vehicles"] == []  # Vehicle coordinates are not exposed for live tracking.
     assert data["kpis"]["active_zones"] == 0
 
 # Test 3: Verify mock supplier inventory API returns stock availability

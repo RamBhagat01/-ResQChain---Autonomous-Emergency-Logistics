@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # Inventory schemas
 class InventoryBase(BaseModel):
@@ -176,6 +176,8 @@ class FloodRiskScoreOut(BaseModel):
     explanation: List[str]
     affected_population: int = 0
     source: str = "heuristic risk score"
+    available_signals: List[str] = Field(default_factory=list)
+    data_mode: str = "UNKNOWN"
 
 
 class WarehouseSiteOut(BaseModel):

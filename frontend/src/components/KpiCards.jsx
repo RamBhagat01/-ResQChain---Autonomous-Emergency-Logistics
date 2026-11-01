@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Package, Truck, CheckCircle2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Package, CheckCircle2, RefreshCw } from 'lucide-react';
 
 const cards = (kpis) => [
   {
@@ -28,14 +28,14 @@ const cards = (kpis) => [
   {
     title: 'Orders In‑Transit',
     value: kpis.orders_in_transit,
-    icon: Truck,
+    icon: Package,
     bg: '#eff6ff',
     iconBg: '#dbeafe',
     iconColor: '#2563eb',
     valueColor: '#2563eb',
     pulse: kpis.orders_in_transit > 0,
     pulseColor: '#93c5fd',
-    desc: 'trucks on the road',
+    desc: 'delivery plans underway',
   },
   {
     title: 'Relief Delivered',

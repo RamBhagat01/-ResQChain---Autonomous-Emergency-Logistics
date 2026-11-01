@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Navigation, Route, AlertTriangle } from 'lucide-react';
+import { Navigation, Route, AlertTriangle, ChevronDown, MapPin } from 'lucide-react';
 import { fetchWarehouseRiskRoute } from '../api';
 
 function distanceKm(a, b) {
@@ -11,12 +11,54 @@ function distanceKm(a, b) {
   return 6371 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
 }
 
-export default function RoutePlanner({ predictions = [], zones = [], warehouses = [], onRouteChange }) {
+const monitoringLocalities = [
+  { name: 'Bhubaneswar', lat: 20.2961, lon: 85.8245 },
+  { name: 'Cuttack', lat: 20.4625, lon: 85.8828 },
+  { name: 'Puri', lat: 19.8135, lon: 85.8312 },
+  { name: 'Paradeep', lat: 20.316, lon: 86.6114 },
+  { name: 'Kendrapara', lat: 20.5, lon: 86.42 },
+  { name: 'Balasore', lat: 21.4934, lon: 86.9135 },
+];
+
+function describeZoneLocation(zone) {
+  const closest = monitoringLocalities
+    .map((locality) => ({ ...locality, distance_km: distanceKm(zone, locality) }))
+    .sort((a, b) => a.distance_km - b.distance_km)[0];
+  const genericName = /^flood zone(?:\s*\(severity\s*\d+\))?$/i.test(String(zone.name).trim());
+  if (!genericName) return { name: zone.name, displayName: zone.name, zoneLabel: 'Active hazard zone' };
+  return {
+    name: `Near ${closest.name}`,
+    displayName: `Near ${closest.name} — ${zone.name} (${Number(zone.center_lat).toFixed(3)}, ${Number(zone.center_lon).toFixed(3)})`,
+    zoneLabel: 'Flood zone',
+  };
+}
+
+function probabilityBadgeClass(level) {
+  if (level === 'HIGH' || level === 'CRITICAL') return 'bg-red-50 text-red-700';
+  if (level === 'MODERATE') return 'bg-blue-50 text-blue-700';
+  if (level === 'LOW') return 'bg-green-50 text-green-700';
+  return 'bg-slate-100 text-slate-600';
+}
+
+function glofasToRiskLevel(level) {
+  if (level === 'HIGH_FLOOD') return 'CRITICAL';
+  if (level === 'DANGER') return 'HIGH';
+  if (level === 'WARNING') return 'MODERATE';
+  if (level === 'NORMAL') return 'LOW';
+  return 'UNKNOWN';
+}
+
+function riskLevelRank(level) {
+  return { UNKNOWN: 0, LOW: 1, MODERATE: 2, HIGH: 3, CRITICAL: 4 }[level] ?? 0;
+}
+
+export default function RoutePlanner({ predictions = [], glofasRisks = [], zones = [], warehouses = [], onRouteChange, onRiskAreaChange }) {
   const [riskId, setRiskId] = useState('');
   const [warehouseId, setWarehouseId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [routeInfo, setRouteInfo] = useState(null);
+  const [riskMenuOpen, setRiskMenuOpen] = useState(false);
 
   const riskAreas = useMemo(() => {
     const areas = predictions
@@ -24,30 +66,69 @@ export default function RoutePlanner({ predictions = [], zones = [], warehouses 
       .map((item) => ({
         id: `risk-${item.name}-${item.lat}-${item.lon}`,
         name: item.name,
+        displayName: item.name,
+        zoneLabel: 'Forecast risk area',
         lat: Number(item.lat),
         lon: Number(item.lon),
         level: item.level,
+        heuristicLevel: item.level,
         score: Number(item.score ?? 0),
+        heuristicScore: Number(item.score ?? 0),
       }));
+
+    glofasRisks.filter((point) => point.risk_level !== 'UNKNOWN'
+      && Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lon)))
+      .forEach((point) => {
+        const glofasLevel = glofasToRiskLevel(point.risk_level);
+        const glofasScore = Number(point.risk_pct ?? 0);
+        const existing = areas.find((area) => distanceKm(area, { lat: Number(point.lat), lon: Number(point.lon) }) < 2);
+        if (existing) {
+          existing.glofas = point;
+          existing.name = point.name || existing.name;
+          existing.level = riskLevelRank(glofasLevel) > riskLevelRank(existing.level) ? glofasLevel : existing.level;
+          existing.score = Math.max(existing.heuristicScore, glofasScore);
+          existing.zoneLabel = `GloFAS ${point.risk_level.replace('_', ' ')} · heuristic ${existing.heuristicLevel}`;
+        } else {
+          areas.push({
+            id: `glofas-${point.name}-${point.lat}-${point.lon}`,
+            name: point.name,
+            displayName: point.name,
+            zoneLabel: `GloFAS ${point.risk_level.replace('_', ' ')}`,
+            lat: Number(point.lat),
+            lon: Number(point.lon),
+            level: glofasLevel,
+            score: glofasScore,
+            glofas: point,
+            source: 'GloFAS',
+          });
+        }
+      });
 
     zones.filter((zone) => zone.active).forEach((zone) => {
       const lat = Number(zone.center_lat);
       const lon = Number(zone.center_lon);
       const existing = areas.find((item) => distanceKm(item, { lat, lon }) < 2);
-      if (!existing) areas.push({
-        id: `zone-${zone.id}`,
-        name: zone.name,
-        lat,
-        lon,
-        level: zone.severity >= 5 ? 'CRITICAL' : zone.severity >= 4 ? 'HIGH' : 'MODERATE',
-        score: zone.severity * 20,
-      });
+      if (!existing) {
+        const location = describeZoneLocation({ ...zone, lat, lon });
+        areas.push({
+          id: `zone-${zone.id}`,
+          ...location,
+          lat,
+          lon,
+          level: zone.severity >= 5 ? 'CRITICAL' : zone.severity >= 4 ? 'HIGH' : 'MODERATE',
+          score: zone.severity * 20,
+        });
+      }
     });
 
     return areas.sort((a, b) => b.score - a.score);
-  }, [predictions, zones]);
+  }, [predictions, glofasRisks, zones]);
 
   const selectedRisk = riskAreas.find((item) => item.id === riskId) ?? riskAreas[0];
+
+  useEffect(() => {
+    onRiskAreaChange?.(selectedRisk ?? null);
+  }, [selectedRisk, onRiskAreaChange]);
 
   const nearestWarehouses = useMemo(() => {
     if (!selectedRisk) return [];
@@ -119,7 +200,7 @@ export default function RoutePlanner({ predictions = [], zones = [], warehouses 
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-50"><Route size={16} className="text-sky-700" /></div>
         <div>
           <h3 className="text-sm font-semibold text-slate-800">Emergency Supply Route</h3>
-          <p className="text-xs text-slate-500">Choose a risk area and one of its three nearest warehouse locations.</p>
+          <p className="text-xs text-slate-500">Choose a risk area to focus the map, then select one of its three nearest warehouse locations.</p>
         </div>
       </div>
 
@@ -129,12 +210,52 @@ export default function RoutePlanner({ predictions = [], zones = [], warehouses 
         <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Warehouse locations are unavailable.</p>
       ) : (
         <>
-          <label className="mb-3 block text-xs font-medium text-slate-600">
-            Risk area
-            <select value={selectedRisk?.id ?? ''} onChange={(event) => chooseRisk(event.target.value)} className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">
-              {riskAreas.map((area) => <option key={area.id} value={area.id}>{area.name} · {area.level} ({area.score}/100)</option>)}
-            </select>
-          </label>
+          <div className="relative mb-3" onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setRiskMenuOpen(false);
+          }}>
+            <span className="mb-1 block text-xs font-medium text-slate-600">Risk area</span>
+            <button
+              type="button"
+              aria-haspopup="listbox"
+              aria-expanded={riskMenuOpen}
+              onClick={() => setRiskMenuOpen((open) => !open)}
+              className="flex min-h-[54px] w-full items-center gap-3 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-left shadow-sm transition hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-200"
+            >
+              <MapPin size={19} className="shrink-0 text-slate-500" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-slate-800">{selectedRisk?.name ?? 'Choose a risk area'}</span>
+                {selectedRisk && <span className="block text-xs text-slate-500">{selectedRisk.zoneLabel} · {selectedRisk.level} risk</span>}
+              </span>
+              {selectedRisk && <span className={`shrink-0 rounded-full px-3 py-1 text-sm font-semibold ${probabilityBadgeClass(selectedRisk.level)}`}>
+                {selectedRisk.glofas ? `${Math.round(selectedRisk.glofas.risk_pct)}% GloFAS index` : `${Math.round(selectedRisk.score)}% Probability`}
+              </span>}
+              <ChevronDown size={17} className={`shrink-0 text-slate-500 transition-transform ${riskMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {riskMenuOpen && <div role="listbox" aria-label="Flood risk areas" className="absolute left-0 right-0 top-full z-[1200] mt-1 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+              {riskAreas.map((area) => (
+                <button
+                  key={area.id}
+                  type="button"
+                  role="option"
+                  aria-selected={selectedRisk?.id === area.id}
+                  onClick={() => {
+                    chooseRisk(area.id);
+                    setRiskMenuOpen(false);
+                  }}
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition ${selectedRisk?.id === area.id ? 'bg-slate-50' : 'hover:bg-slate-50'}`}
+                >
+                  <MapPin size={17} className="shrink-0 text-slate-500" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-slate-800">{area.name}</span>
+                    <span className="block text-xs text-slate-500">{area.zoneLabel || 'Forecast risk area'} · {area.level} risk</span>
+                  </span>
+                  <span className={`shrink-0 rounded-full px-3 py-1 text-sm font-semibold ${probabilityBadgeClass(area.level)}`}>
+                    {area.glofas ? `${Math.round(area.glofas.risk_pct)}% GloFAS index` : `${Math.round(area.score)}% Probability`}
+                  </span>
+                </button>
+              ))}
+            </div>}
+          </div>
 
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Nearest warehouse options</p>
           <div className="grid gap-2 sm:grid-cols-3">
@@ -143,7 +264,7 @@ export default function RoutePlanner({ predictions = [], zones = [], warehouses 
                 <span className="flex items-start gap-2">
                   <input type="radio" name="route-warehouse" value={warehouse.serial_no} checked={warehouseId === String(warehouse.serial_no)} onChange={(event) => chooseWarehouse(event.target.value)} className="mt-0.5 accent-emerald-700" />
                   <span>
-                    <span className="block text-sm font-semibold text-slate-800">{index + 1}. {warehouse.zone_name} warehouse</span>
+                    <span className="block text-sm font-semibold text-slate-800">{index + 1}. W{warehouse.serial_no} · {warehouse.zone_name} warehouse</span>
                     <span className="mt-0.5 block text-xs text-slate-500">{warehouse.distance_km.toFixed(1)} km straight-line</span>
                     <span className="block text-[11px] text-slate-400">Reported vacant: {Number(warehouse.vacant_space_mt).toLocaleString()} MT</span>
                   </span>

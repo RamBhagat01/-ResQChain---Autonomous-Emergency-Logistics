@@ -139,7 +139,6 @@ def oswc_warehouses():
 def get_state(db: Session = Depends(get_db)):
     warehouses = db.query(Warehouse).all()
     camps = db.query(Camp).all()
-    vehicles = db.query(Vehicle).all()
     zones = db.query(Zone).all()
     demands = db.query(Demand).all()
     orders = db.query(Order).all()
@@ -174,7 +173,8 @@ def get_state(db: Session = Depends(get_db)):
     return StateResponse(
         warehouses=warehouses,
         camps=camps,
-        vehicles=vehicles,
+        # Fleet positions are intentionally not exposed to the dashboard/API state payload.
+        vehicles=[],
         zones=zones,
         demands=demands,
         orders=orders,
