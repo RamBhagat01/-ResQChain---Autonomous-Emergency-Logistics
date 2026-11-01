@@ -11,6 +11,7 @@ import {
   runCycleNow,
   fetchRoutingStatus,
   fetchFloodPrediction,
+  fetchOSWCWarehouses,
 } from './api';
 
 import MapView from './components/MapView';
@@ -34,6 +35,7 @@ export default function App() {
   const [satellite, setSatellite] = useState(null);
   const [predictions, setPredictions] = useState([]);
   const [sites, setSites] = useState([]);
+  const [oswcWarehouses, setOswcWarehouses] = useState({ warehouses: [], total_rows: 0, located_count: 0, unlocated_count: 0 });
 
   const loadState = async () => {
     try {
@@ -52,6 +54,8 @@ export default function App() {
   }, []);
 
   useEffect(() => { fetchFloodPrediction().then(setPredictions).catch(() => setPredictions([])); const id = setInterval(() => fetchFloodPrediction().then(setPredictions).catch(() => {}), 60000); return () => clearInterval(id); }, []);
+
+  useEffect(() => { fetchOSWCWarehouses().then(setOswcWarehouses).catch(() => {}); }, []);
 
   useEffect(() => {
     const loadRoutingStatus = async () => {
@@ -196,6 +200,7 @@ export default function App() {
                 floodGeojson={satellite?.polygons}
                 predictions={predictions}
                 sites={sites}
+                oswcWarehouses={oswcWarehouses.warehouses}
                 onLocationSelect={handleMapLocationSelect}
               />
             </div>

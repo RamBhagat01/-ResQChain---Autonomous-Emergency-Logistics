@@ -1,5 +1,5 @@
-import React from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline, GeoJSON, CircleMarker, useMapEvents } from 'react-leaflet';
+import React, { useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline, GeoJSON, CircleMarker, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 
 // Custom Map Click Handler to capture coordinates for disaster simulation
@@ -11,6 +11,18 @@ function MapClickHandler({ onLocationSelect }) {
       }
     },
   });
+  return null;
+}
+
+function FitWarehouseBounds({ warehouses }) {
+  const map = useMap();
+  const hasFit = useRef(false);
+  useEffect(() => {
+    if (hasFit.current || !warehouses.length) return;
+    const bounds = L.latLngBounds(warehouses.map((item) => [item.lat, item.lon]));
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 8 });
+    hasFit.current = true;
+  }, [map, warehouses]);
   return null;
 }
 
@@ -80,7 +92,7 @@ const createTruckIcon = (name, status, offset) =>
   });
 
 // Interactive Leaflet Map displaying live warehouses, camps, fleet trucks, danger zones, and active routes
-export default function MapView({ warehouses = [], camps = [], vehicles = [], zones = [], orders = [], floodGeojson = null, predictions = [], sites = [], showSatellite = true, showPrediction = true, showSites = true, onLocationSelect }) {
+export default function MapView({ warehouses = [], camps = [], vehicles = [], zones = [], orders = [], floodGeojson = null, predictions = [], sites = [], oswcWarehouses = [], showSatellite = true, showPrediction = true, showSites = true, onLocationSelect }) {
   // Center map around Odisha (Bhubaneswar - Cuttack - Puri - Paradeep corridor)
   const defaultCenter = [20.3, 85.8];
 
@@ -100,6 +112,7 @@ export default function MapView({ warehouses = [], camps = [], vehicles = [], zo
         />
 
         <MapClickHandler onLocationSelect={onLocationSelect} />
+        <FitWarehouseBounds warehouses={oswcWarehouses} />
 
         {showSatellite && floodGeojson && (
           <GeoJSON data={floodGeojson} pathOptions={{ color: '#2563eb', fillColor: '#3b82f6', fillOpacity: 0.28, weight: 2 }} />
@@ -138,6 +151,30 @@ export default function MapView({ warehouses = [], camps = [], vehicles = [], zo
             </Popup>
           </Marker>
         ))}
+
+        {/* OSWC warehouse locations are shown separately from dispatch inventory. */}
+        {Object.values(oswcWarehouses.reduce((groups, item) => {
+          const key = `${Number(item.lat).toFixed(6)},${Number(item.lon).toFixed(6)}`;
+          (groups[key] ||= []).push(item);
+          return groups;
+        }, {})).map((group) => {
+          const first = group[0];
+          return <Marker key={`oswc-${first.serial_no}`} position={[first.lat, first.lon]}
+            icon={L.divIcon({ className: 'oswc-warehouse-pin', html: `<div>W${group.map((item) => item.serial_no).join('/')}</div>`, iconSize: [38, 30], iconAnchor: [19, 15] })}
+            zIndexOffset={450}>
+            <Popup><div className="text-slate-900 text-xs max-w-64">
+              <p className="font-bold text-emerald-800">OSWC warehouse reference location</p>
+              {group.map((item) => <div key={item.serial_no} className="mt-2 border-t pt-2">
+                <p className="font-semibold">Warehouse #{item.serial_no} · {item.zone_name}</p>
+                {item.warehouse_incharge && <p>In-charge: {item.warehouse_incharge}</p>}
+                <p>Total capacity: {Number(item.total_capacity_mt).toLocaleString()} MT · Vacant: {Number(item.vacant_space_mt).toLocaleString()} MT</p>
+                <p className="text-slate-500">Location from supplied Google Maps link ({item.coordinate_status})</p>
+                {item.google_maps_url && <a href={item.google_maps_url} target="_blank" rel="noreferrer" className="text-blue-700 underline">Verify in Google Maps</a>}
+              </div>)}
+              <p className="mt-2 text-amber-700">Reported capacity is reference information only; availability is not confirmed.</p>
+            </div></Popup>
+          </Marker>;
+        })}
 
         {/* 2. Relief Camps */}
         {camps.map((camp) => (

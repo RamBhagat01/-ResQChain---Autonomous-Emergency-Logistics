@@ -114,3 +114,9 @@ export async function fetchWarehouseSites(params = {}) {
   return res.json();
 }
 
+export async function fetchOSWCWarehouses() {
+  const res = await fetch(`${API_BASE}/warehouses/oswc`);
+  if (!res.ok) throw new Error("Failed to fetch OSWC warehouse locations");
+  return res.json();
+}
+

@@ -1,4 +1,6 @@
 from typing import List, Optional
+from pathlib import Path
+import json
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -65,6 +67,23 @@ def health_check():
 def routing_status():
     """Return live OSRM availability and a plain-language reason when offline."""
     return check_osrm_service()
+
+
+@app.get("/api/warehouses/oswc")
+def oswc_warehouses():
+    """Return CSV-sourced OSWC locations; these are reference capacity records, not live stock."""
+    data_path = Path(__file__).parent / "data" / "oswc_warehouses.json"
+    # utf-8-sig accepts both plain UTF-8 and PowerShell-exported JSON with a BOM.
+    rows = json.loads(data_path.read_bytes().decode("utf-8-sig"))
+    located = [row for row in rows if row.get("lat") is not None and row.get("lon") is not None
+               and 17.5 <= row["lat"] <= 23.0 and 80.0 <= row["lon"] <= 88.0]
+    return {
+        "source": "User-provided Odisha OSWC warehouse CSV; coordinates resolved from supplied Google Maps links",
+        "total_rows": len(rows),
+        "located_count": len(located),
+        "unlocated_count": len(rows) - len(located),
+        "warehouses": located,
+    }
 
 # Retrieve comprehensive system state for dashboard visualization in one call
 @app.get("/api/state", response_model=StateResponse)

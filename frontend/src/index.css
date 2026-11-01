@@ -199,3 +199,19 @@ input[type='range']::-moz-range-thumb {
 .animate-ping {
   animation: ping 1.2s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
+
+.oswc-warehouse-pin > div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 26px;
+  padding: 0 5px;
+  border: 2px solid #fff;
+  border-radius: 7px;
+  background: #047857;
+  color: #fff;
+  font: 700 10px/1 system-ui, sans-serif;
+  white-space: nowrap;
+  box-shadow: 0 2px 7px rgba(0, 0, 0, .45);
+}
